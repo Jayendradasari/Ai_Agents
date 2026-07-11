@@ -353,6 +353,23 @@
 </div>
 <script>
 
+  function showTyping(){
+    const messages= document.getElementById("chat-messages");
+    messages.insertAdjacentHTML("beforeend",`
+    <div id="typing-indicator" class="agent-message p-2" style="font-size:13px;max-width:85%;">
+      Typing....
+    </div>  
+    `);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function hideTyping(){
+      document.getElementById("typing-indicator").remove();
+  }
+  
+
+
+
   function showChat(){
     document.getElementById('help-card').style.display = "none";
 
@@ -369,17 +386,45 @@
     div.style.fontSize = "13px";
     div.innerText = text;
     messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
   }
 
 
 
-  function sendMessage(){
+  async function sendMessage(){
     const input = document.getElementById('chat-input');
     const message = input.value.trim();
+
+    console.log(message);
     if(!message)  return;
     
     appendMessage(message,"customer");
     input.value = "";
+
+    setTimeout(()=> showTyping(),2000); // show typing after 2 sec
+
+    // send message to django view
+
+    try{
+     const response = await fetch("/support/chat/{{order.id}}/",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "X-CSRFToken":"{{csrf_token}}"
+        },
+        body: JSON.stringify({message:message})
+      });
+
+      const data = await response.json()
+      hideTyping()
+      appendMessage(data.reply,"agent")
+
+    }catch(error){
+      console.error("Error:",error )
+      appendMessage("sorry, something went wrong","agent")
+
+    }
+
   }
   // send message on pressing Enter key
   document.getElementById('chat-input').addEventListener('keypress',function(e){

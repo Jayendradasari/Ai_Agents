@@ -135,3 +135,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_REDIRECT_URL = '/orders/'  # Redirect to orders page after login
 LOGOUT_REDIRECT_URL = '/login/'  # Redirect to login page after logout
 LOGIN_URL = '/login/'  # URL for the login page
+
+
+ANTHROPIC_API_KEY=config("ANTHROPIC_API_KEY")
+ANTHROPIC_MODEL=config("ANTHROPIC_MODEL")
