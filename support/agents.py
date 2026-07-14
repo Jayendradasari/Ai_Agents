@@ -32,6 +32,29 @@ Important rules:
 
 
 """
+# MANAGER SYSTEM PROMPT --> Involvement of manager
+MANAGER_SYSTEM_PROMPT="""
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"""
 
 #SUPPORT TOOLS --> Tool Schemas, that ai agents will read
 SUPPORT_TOOLS=[
@@ -86,6 +109,21 @@ SUPPORT_TOOLS=[
 
       }
     },
+    {
+        "name":"escalate_to_manager",
+        "description":"escalate the case to manager for refund decision.Use this when customer requests a refund or compensation. Prepare a detailed case summary including order details, refund history and customer complaint before escalating ",
+        "input_schema":{
+          "type":"object",
+          "properties":{
+             "order_id":{
+                "type":"string",
+                "description":"Complete case summary including order details, refund history and customer complaint"
+            }
+        },
+        "required":["case_summary"]
+
+      }
+    }
 
 
 ]
@@ -97,14 +135,18 @@ def execute_tool(tool_name,tool_input):
     if tool_name == "get_order_details":
         return get_order_details(tool_input["order_id"])
     
-    elif tool_name == "get_refund_history":
+    if tool_name == "get_refund_history":
         return get_refund_history(tool_input["user_id"])
     
-    elif tool_name == "check_delivery_status":
+    if tool_name == "check_delivery_status":
         return check_delivery_status(tool_input["tracking_number"],tool_input["carrier"])
+    if tool_name == "escalate_to_manager":
+        case_summary = tool_input["case_summary"]
+        decision = run_manager_agent(case_summary)
+        return decision
     
 
-def run_support_agent(user_message, conversation_id):
+def run_support_agent(user_message, conversation_id, order_id, user_id):
     conv = get_object_or_404(Conversation, id=conversation_id)
 
     conversation_messages=[]
@@ -115,15 +157,90 @@ def run_support_agent(user_message, conversation_id):
         })
 
     # send this conversation to LLM
+    while True:
 
-    response = client.messages.create(
-        model=anthropic_model,
-        max_tokens=1024,
-        system=SUPPORT_SYSTEM_PROMPT,
-        messages=conversation_messages
-    )    
+      response = client.messages.create(
+         model=anthropic_model,
+         max_tokens=1024,
+         system=SUPPORT_SYSTEM_PROMPT + f"\n\nContext: This conversation is about order #{order_id}, user_id: {user_id}",
+         tools=SUPPORT_TOOLS,
+         messages=conversation_messages
+      )
+      print('stop_reason==>', response.stop_reason)
+      print('content==>', response.content)
 
-    final_text = response.content[0].text
+      if response.stop_reason == 'tool_use':
+          tool_result=[]
+          for block in response.content:
+              if block.type == 'tool_use':
+                  print("tool_call==>",block.name)
+                  print("tool_input==>",block.input)
 
-    return final_text
+                  # execute the tool
+                  result = execute_tool(block.name, block.input)
+                  print('tool_result==>', result)
+
+                  tool_result.append({
+                      "type":"tool_result",
+                      "tool_use_id":block.id,
+                      "content":str(result)
+                  })
+
+          conversation_messages.append({
+              "role":"assistant",
+              "content":response.content
+          })
+
+          conversation_messages.append({
+              "role":"user",
+              "content":tool_result
+          })
+
+
+      else:
+        return response.content[0].text
+      
+
+def run_manager_agent(case_summary):
+    manager_messages = [
+        {"role":"user", "content":case_summary} #user is task giver ,so here user is tara agent
+    ]    
+
+    while True:
+        response = client.messages.create(
+            model = anthropic_model,
+            max_tokens=1024,
+            system = MANAGER_SYSTEM_PROMPT,
+            messages = manager_messages
+        )  
+
+        if response.stop_reason == 'tool_use':
+          tool_result=[]
+          for block in response.content:
+              if block.type == 'tool_use':
+                  
+                # execute the tool
+                  result = execute_tool(block.name, block.input)
+                  tool_result.append({
+                      "type":"tool_result",
+                      "tool_use_id":block.id,
+                      "content":str(result)
+                  })
+
+          manager_messages.append({
+              "role":"assistant",
+              "content":response.content
+          })
+
+          manager_messages.append({
+              "role":"user",
+              "content":tool_result
+          })
+
+
+        else:
+          return response.content[0].text
+
+
+        
 

@@ -216,6 +216,7 @@
       border-radius: 0 10px 10px 10px;
       margin-right:auto;
       max-width:80%;
+      white-space: pre-line;
     }
     .customer-message{
       background:#1a1a2e;
@@ -336,9 +337,25 @@
          </div>
          <!--Chat area  -->
          <div id="chat-messages" class="chat-messages p-3 d-flex flex-column gap-2">
+          {% if conversation %}
+          <!-- print previous messages -->
+           {% for msg in previous_messages %}
+           {% if msg.role == 'user'%}
+           <div class="customer-message px-2 px-3" style="font-size: 13px;max-width: 85%">
+            {{msg.content}}
+           </div>
+           {% else %}
+           <div class="agent-message px-2 px-3" style="font-size: 13px;max-width: 85%">
+            {{msg.content}}
+           </div>
+           {% endif %}
+           {% endfor %}
+
+          {% else %}
           <div class="agent-message px-2 px-3" style="font-size: 13px; max-width:80%;">
-            Hi! I'm your AI support agent. How can I assist you with your order today?
+            Hi! {{ request.user.first_name }},I'm Tara, How can I assist you with your order today?
           </div>
+           {% endif %}
         
          </div>
          <!-- Chat footer  -->
@@ -400,8 +417,9 @@
     
     appendMessage(message,"customer");
     input.value = "";
+    input.disabled = true;
 
-    setTimeout(()=> showTyping(),2000); // show typing after 2 sec
+    const typingTimeout=setTimeout(()=> showTyping(),1000); // show typing after 2 sec
 
     // send message to django view
 
@@ -417,12 +435,20 @@
 
       const data = await response.json()
       hideTyping()
-      appendMessage(data.reply,"agent")
+      appendMessage(data.reply,"agent");
+      input.disabled = false;
+      input.focus();
 
     }catch(error){
       console.error("Error:",error )
       appendMessage("sorry, something went wrong","agent")
+      input.disabled = false;
+      input.focus();
 
+    }finally{
+      clearTimeout(typingTimeout);
+      hideTyping();
+      
     }
 
   }
