@@ -192,7 +192,7 @@ RISK_TOOLS = [
 
 # execute_tool()-->bridge between claude and python functions (tools)
 
-def execute_tool(tool_name,tool_input): 
+def execute_tool(tool_name,tool_input,conversation_id=None): 
 
     if tool_name == "get_order_details":
         return get_order_details(tool_input["order_id"])
@@ -204,11 +204,11 @@ def execute_tool(tool_name,tool_input):
         return check_delivery_status(tool_input["tracking_number"],tool_input["carrier"])
     if tool_name == "escalate_to_manager":
         case_summary = tool_input["case_summary"]
-        decision = run_manager_agent(case_summary)
+        decision = run_manager_agent(case_summary, conversation_id)
         return decision
     if tool_name == "assess_fraud_risk":
         user_id = tool_input['user_id']
-        verdict = run_risk_agent(user_id)
+        verdict = run_risk_agent(user_id, conversation_id)
         return verdict
     
     if tool_name == "get_customer_risk_profile":
@@ -246,10 +246,15 @@ def run_support_agent(user_message, conversation_id, order_id, user_id):
               if block.type == 'tool_use':
                   print("tool_call==>",block.name)
                   print("tool_input==>",block.input)
+                  #log tool call
+                  AgentLog.objects.create(conversation = conv, event_type="tool_call", message=f"Calling tool {block.name} with {block.input}" )
 
                   # execute the tool
-                  result = execute_tool(block.name, block.input)
+                  result = execute_tool(block.name, block.input, conversation_id)
                   print('tool_result==>', result)
+                  #log tool result
+                  AgentLog.objects.create(conversation = conv, event_type="tool_result", message=f" {block.name} returned: {str(result)[:200]}" )
+
 
                   tool_result.append({
                       "type":"tool_result",
@@ -269,10 +274,16 @@ def run_support_agent(user_message, conversation_id, order_id, user_id):
 
 
       else:
+        #log final reply
+        AgentLog.objects.create(conversation = conv, event_type="final", message=response.content[0].text )
+
         return response.content[0].text
       
 
-def run_manager_agent(case_summary):
+def run_manager_agent(case_summary,conversation_id):
+    conv = get_object_or_404(Conversation, id=conversation_id)
+
+    AgentLog.objects.create(conversation=conv, event_type="manager", message=f"Case received for review: {case_summary[:200]}")
     manager_messages = [
         {"role":"user", "content":case_summary} #user is task giver ,so here user is tara agent
     ]    
@@ -290,6 +301,10 @@ def run_manager_agent(case_summary):
           tool_result=[]
           for block in response.content:
               if block.type == 'tool_use':
+                  #log consulting risk agent
+                  AgentLog.objects.create(conversation=conv, event_type="manager", message= "Consulting risk agent for fraud assessment...")
+
+
                   
                 # execute the tool
                   result = execute_tool(block.name, block.input)
@@ -311,9 +326,14 @@ def run_manager_agent(case_summary):
 
 
         else:
-          return response.content[0].text
+          decision = response.content[0].text
+          AgentLog.objects.create(conversation=conv, event_type="manager", message=f"Decision: {decision[:200]}")
+          return decision
 
-def run_risk_agent(user_id):
+def run_risk_agent(user_id,conversation_id):
+     conv = get_object_or_404(Conversation, id=conversation_id)
+     #log assessment started
+     AgentLog.objects.create(conversation=conv, event_type="risk", message=f"Starting fraud assessment for user {user_id}")
      risk_messages = [
         {"role": "user", "content": f"Please assess the fraud risk for user ID {user_id}. User your tool to get their profile and return a verdict."}
     ]
@@ -331,9 +351,12 @@ def run_risk_agent(user_id):
                 tool_result=[]
                 for block in response.content:
                   if block.type == 'tool_use':
+
+                    AgentLog.objects.create(conversation=conv, event_type="risk", message=f"Calling {block.name} to get customer risk profile..")
+
                   
                 # execute the tool
-                    result = execute_tool(block.name, block.input)
+                    result = execute_tool(block.name, block.input, conversation_id)
                     tool_result.append({
                        "type":"tool_result",
                        "tool_use_id":block.id,
@@ -352,5 +375,7 @@ def run_risk_agent(user_id):
     
         
          else:
-           return response.content[0].text
+           verdict = response.content[0].text
+           AgentLog.objects.create(conversation=conv, event_type="risk", message=f"Verdict: {verdict}")
+           return verdict
 

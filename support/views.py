@@ -5,9 +5,12 @@ import time
 from orders.models import Order
 from .models import Conversation,Message
 from .agents import run_support_agent
+import traceback
+
 
 def chat(request,order_id):
-    if request.method == 'POST':
+    # try:
+     if request.method == 'POST':
         data = json.loads(request.body)
         user_message = data.get("message")
 
@@ -31,3 +34,7 @@ def chat(request,order_id):
         
         # time.sleep(2)
         return JsonResponse({"reply":reply})
+    # except Exception as e:
+    #    print("ERROR:",e)
+    #    traceback.print_exc()
+    #    return JsonResponse({"error": str(e)},status=500)
