@@ -3,6 +3,7 @@ from .tracking_data import DELIVERY_DATA
 from django.shortcuts import render
 from orders.models import Order,RefundRequest
 from datetime import timedelta
+from .rag import search_knowledge_base as rag_search
 
 def get_order_details(order_id):
     # here request param is not used because agent calls this function to get order details for a specific order_id
@@ -84,3 +85,9 @@ def get_customer_risk_profile(user_id):
         "pending_refunds": pending,
         "refund_to_order_ratio": refund_to_order_ratio
     }
+
+#wrapper function
+def search_knowledge_base(query):
+    # Call the RAG module to search the knowledge base
+    result = rag_search(query)
+    return {"result": result}
