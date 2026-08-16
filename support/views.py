@@ -8,6 +8,7 @@ from .agents import run_support_agent
 from .event_queue import subscribe,unsubscribe,publish
 import traceback
 from django.contrib.admin.views.decorators import staff_member_required
+from .langchain_agents import run_support_agent_langchain
 
 
 def chat(request,order_id):
@@ -30,7 +31,9 @@ def chat(request,order_id):
         publish(conversation.id, event)
 
         # send user message and conversation to LLM
-        reply = run_support_agent(user_message, conversation.id, order.id, request.user.id)
+        # reply = run_support_agent(user_message, conversation.id, order.id, request.user.id)
+         
+        reply = run_support_agent_langchain(user_message, conversation.id, order.id, request.user.id)
 
         # store the LLM reply
         Message.objects.create(conversation=conversation, role="assistant", content=reply)
